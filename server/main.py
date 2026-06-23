@@ -6,6 +6,9 @@ from mock_data import inventory_items, orders, demand_forecasts, backlog_items, 
 
 app = FastAPI(title="Factory Inventory Management System")
 
+# In-memory store for submitted restocking orders (resets on server restart)
+submitted_restocking_orders = []
+
 # Quarter mapping for date filtering
 QUARTER_MAP = {
     'Q1-2025': ['2025-01', '2025-02', '2025-03'],
@@ -119,6 +122,16 @@ class CreatePurchaseOrderRequest(BaseModel):
     unit_cost: float
     expected_delivery_date: str
     notes: Optional[str] = None
+
+class RestockingOrderItem(BaseModel):
+    item_sku: str
+    item_name: str
+    quantity: int
+    unit_cost: float
+
+class CreateRestockingOrderRequest(BaseModel):
+    items: List[RestockingOrderItem]
+    warehouse: str = "San Francisco"
 
 # API endpoints
 @app.get("/")
@@ -303,6 +316,73 @@ def get_monthly_trends():
     result = list(months.values())
     result.sort(key=lambda x: x['month'])
     return result
+
+@app.get("/api/restocking/recommendations")
+def get_restocking_recommendations():
+    """Get restocking recommendations by cross-referencing demand gaps with inventory costs."""
+    inventory_by_sku = {item["sku"]: item for item in inventory_items}
+    recommendations = []
+
+    for forecast in demand_forecasts:
+        gap = forecast["forecasted_demand"] - forecast["current_demand"]
+        if gap <= 0:
+            continue
+
+        inv = inventory_by_sku.get(forecast["item_sku"])
+        unit_cost = inv["unit_cost"] if inv else 50.0
+        recommendations.append({
+            "id": forecast["id"],
+            "item_sku": forecast["item_sku"],
+            "item_name": forecast["item_name"],
+            "current_demand": forecast["current_demand"],
+            "forecasted_demand": forecast["forecasted_demand"],
+            "trend": forecast["trend"],
+            "period": forecast["period"],
+            "unit_cost": unit_cost,
+            "restock_quantity": gap,
+            "total_cost": round(gap * unit_cost, 2),
+            "category": inv["category"] if inv else "General",
+            "warehouse": inv["warehouse"] if inv else "San Francisco",
+        })
+
+    recommendations.sort(key=lambda x: x["total_cost"], reverse=True)
+    return recommendations
+
+
+@app.post("/api/restocking/orders")
+def create_restocking_order(request: CreateRestockingOrderRequest):
+    """Submit a restocking order. Persists in memory until server restart."""
+    from datetime import datetime, timedelta
+
+    now = datetime.now()
+    seq = len(submitted_restocking_orders) + 1
+    order_number = f"RST-{now.strftime('%Y-%m%d')}-{seq:04d}"
+    total_value = sum(item.quantity * item.unit_cost for item in request.items)
+
+    order = {
+        "id": f"rst-{seq}",
+        "order_number": order_number,
+        "customer": "Internal Restocking",
+        "items": [
+            {"sku": item.item_sku, "name": item.item_name, "quantity": item.quantity, "unit_price": item.unit_cost}
+            for item in request.items
+        ],
+        "status": "Submitted",
+        "order_date": now.isoformat(),
+        "expected_delivery": (now + timedelta(days=14)).isoformat(),
+        "total_value": round(total_value, 2),
+        "warehouse": request.warehouse,
+        "is_restocking": True,
+    }
+    submitted_restocking_orders.append(order)
+    return order
+
+
+@app.get("/api/restocking/orders")
+def get_restocking_orders():
+    """Get all submitted restocking orders."""
+    return submitted_restocking_orders
+
 
 if __name__ == "__main__":
     import uvicorn

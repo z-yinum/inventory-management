@@ -52,6 +52,9 @@ npm install && npm run dev
 - `GET /api/dashboard/summary` - All filters
 - `GET /api/demand`, `/api/backlog` - No filters
 - `GET /api/spending/*` - Summary, monthly, categories, transactions
+- `GET /api/restocking/recommendations` - Demand gap × inventory unit cost, sorted by total cost desc
+- `POST /api/restocking/orders` - Submit restocking order (in-memory, 14-day lead time)
+- `GET /api/restocking/orders` - Fetch submitted restocking orders
 
 ## Common Issues
 1. Use unique keys in v-for (not `index`) - use `sku`, `month`, etc.
@@ -61,11 +64,12 @@ npm install && npm run dev
 5. Revenue goals: $800K/month single, $9.6M YTD all months
 
 ## File Locations
-- Views: `client/src/views/*.vue`
+- Views: `client/src/views/*.vue` (Dashboard, Inventory, Orders, Demand, Spending, Reports, Restocking)
 - API Client: `client/src/api.js`
 - Backend: `server/main.py`, `server/mock_data.py`
 - Data: `server/data/*.json`
 - Styles: `client/src/App.vue`
+- Architecture reference: `docs/architecture.html`
 
 ## Design System
 - Colors: Slate/gray (#0f172a, #64748b, #e2e8f0)
