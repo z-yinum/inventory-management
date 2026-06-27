@@ -74,6 +74,53 @@
           </table>
         </div>
       </div>
+
+      <div class="card restock-section">
+        <div class="card-header">
+          <h3 class="card-title">Submitted Restocking Orders</h3>
+          <span class="badge restock-header-badge">Restocking</span>
+        </div>
+        <div v-if="restockLoading" class="loading">Loading restocking orders...</div>
+        <div v-else-if="restockOrders.length === 0" class="no-restock">
+          No restocking orders submitted yet.
+        </div>
+        <div v-else class="table-container">
+          <table class="restock-table">
+            <thead>
+              <tr>
+                <th class="col-order-number">Order Number</th>
+                <th class="col-items">Items</th>
+                <th class="col-status">Status</th>
+                <th class="col-date">Order Date</th>
+                <th class="col-date">Expected Delivery</th>
+                <th class="col-value">Total Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="rOrder in restockOrders" :key="rOrder.id">
+                <td class="col-order-number"><strong>{{ rOrder.order_number }}</strong></td>
+                <td class="col-items">
+                  <details class="items-details">
+                    <summary class="items-summary">{{ rOrder.items.length }} item{{ rOrder.items.length !== 1 ? 's' : '' }}</summary>
+                    <div class="items-dropdown">
+                      <div v-for="(item, idx) in rOrder.items" :key="idx" class="item-entry">
+                        <span class="item-name">{{ item.item_name }} ({{ item.item_sku }})</span>
+                        <span class="item-meta">Qty: {{ item.quantity }} @ ${{ item.unit_cost }}</span>
+                      </div>
+                    </div>
+                  </details>
+                </td>
+                <td class="col-status">
+                  <span class="badge restock-status-badge">{{ rOrder.status }}</span>
+                </td>
+                <td class="col-date">{{ formatDate(rOrder.order_date) }}</td>
+                <td class="col-date"><strong>{{ formatDate(rOrder.expected_delivery) }}</strong></td>
+                <td class="col-value"><strong>${{ rOrder.total_value.toLocaleString() }}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -153,7 +200,24 @@ export default {
       })
     }
 
-    onMounted(loadOrders)
+    const restockOrders = ref([])
+    const restockLoading = ref(false)
+
+    const loadRestockOrders = async () => {
+      try {
+        restockLoading.value = true
+        restockOrders.value = await api.getRestockOrders()
+      } catch (err) {
+        console.error('Failed to load restock orders:', err)
+      } finally {
+        restockLoading.value = false
+      }
+    }
+
+    onMounted(() => {
+      loadOrders()
+      loadRestockOrders()
+    })
 
     return {
       t,
@@ -165,7 +229,9 @@ export default {
       formatDate,
       currencySymbol,
       translateProductName,
-      translateCustomerName
+      translateCustomerName,
+      restockOrders,
+      restockLoading
     }
   }
 }
@@ -275,5 +341,34 @@ export default {
 .item-meta {
   font-size: 0.813rem;
   color: #64748b;
+}
+
+.restock-section {
+  border-top: 3px solid #7c3aed;
+}
+
+.restock-header-badge {
+  background: linear-gradient(135deg, #7c3aed, #0d9488);
+  color: white;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+}
+
+.restock-status-badge {
+  background: #f3e8ff;
+  color: #6b21a8;
+}
+
+.no-restock {
+  padding: 2rem;
+  text-align: center;
+  color: #64748b;
+  font-size: 0.938rem;
+}
+
+.restock-table {
+  table-layout: fixed;
+  width: 100%;
 }
 </style>
